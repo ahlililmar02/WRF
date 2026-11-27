@@ -3879,7 +3879,8 @@ CALL lsm_mosaic_init(IVGTYP,config_flags%ISWATER,config_flags%ISURBAN,config_fla
 #endif
                            lake_depth_flag, use_lakedepth,              &
                            tkdry3d,        tksatu3d,        lake2d,          its, ite, jts, jte, &
-                           ims,ime, jms,jme)
+                           ims,ime, jms,jme,                                                 &
+                           landusef, nlcat, config_flags%lake_tile_opt)   ! blue-tile (P4)
      ENDIF
  
 !-- initialize pbl scheme

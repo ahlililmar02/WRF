@@ -518,6 +518,20 @@
       ENDDO
 
 !-----------------------------------------------------------------------
+! blue-tile (P4): lake_tile_opt = 1 needs the lake model and no Noah mosaic
+!-----------------------------------------------------------------------
+      DO i = 1, model_config_rec % max_dom
+         IF ( .NOT. model_config_rec % grid_allowed(i) ) CYCLE
+         IF ( model_config_rec % lake_tile_opt(i) .EQ. 1 .AND. &
+              ( model_config_rec % sf_lake_physics(i) .NE. 1 .OR. &
+                model_config_rec % sf_surface_mosaic .NE. 0 ) ) THEN
+            wrf_err_message = '--- ERROR: lake_tile_opt = 1 needs sf_lake_physics = 1 and sf_surface_mosaic = 0'
+            CALL wrf_debug ( 0, TRIM( wrf_err_message ) )
+            count_fatal_error = count_fatal_error + 1
+         END IF
+      ENDDO
+
+!-----------------------------------------------------------------------
 ! Check that only compatible options are set when slucm_distributed_drag is set
 !-----------------------------------------------------------------------
       IF (model_config_rec % slucm_distributed_drag) THEN

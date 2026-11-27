@@ -138,7 +138,11 @@ MODULE module_sf_lake
                      lakemask                                          ,&
 #endif
                      hfx          ,lh             ,grdflx       ,tsk             ,&  !o
-                     qfx          ,t2             ,th2          ,q2 )
+                     qfx          ,t2             ,th2          ,q2              ,&
+                     landusef     ,nlcat          ,lake_tile_opt                 ,&  ! blue-tile (P4)
+                     tsk_land     ,emiss_land                                    ,&
+                     hfx_lkt      ,lh_lkt         ,grd_lkt      ,tsk_lkt         ,&
+                     hfx_lnd      ,lh_lnd         ,grd_lnd )
 
 !==============================================================================
 ! This subroutine was first edited by Hongping Gu and Jiming Jin for coupling
@@ -166,7 +170,7 @@ MODULE module_sf_lake
     REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ),INTENT(IN)  :: U_PHY
     REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ),INTENT(IN)  :: V_PHY
     REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(IN)  :: glw
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(IN)  :: emiss
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT)  :: emiss   ! blue-tile: INOUT (blended in tile cells)
     REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(IN)  :: rainbl
     REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(IN)  :: swdown
     REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT)  :: albedo
@@ -187,14 +191,14 @@ MODULE module_sf_lake
     REAL                                                  ,INTENT(IN)  :: lake_min_elev
 
 !out:
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: HFX
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: LH
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: GRDFLX
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: TSK
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: QFX   
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: T2
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: TH2
-    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(OUT) :: Q2
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: HFX
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: LH
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: GRDFLX
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: TSK
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: QFX   
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: T2
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: TH2
+    REAL,           DIMENSION( ims:ime, jms:jme )         ,INTENT(INOUT) :: Q2
 
 !in&out:
 
@@ -214,6 +218,16 @@ MODULE module_sf_lake
                                                                                   dz3d 
     real,    dimension( ims:ime,-nlevsnow+0:nlevsoil, jms:jme )  ,INTENT(inout)  :: zi3d    
        
+
+! blue-tile (P4): lake column blended by water fraction in land cells
+    INTEGER, INTENT(IN) :: nlcat, lake_tile_opt
+    REAL, DIMENSION( ims:ime, nlcat, jms:jme ), INTENT(IN) :: landusef
+    REAL, DIMENSION( ims:ime, jms:jme ), INTENT(INOUT) :: tsk_land, emiss_land,           &
+                                                          hfx_lkt, lh_lkt, grd_lkt, tsk_lkt, &
+                                                          hfx_lnd, lh_lnd, grd_lnd
+    LOGICAL  :: tile
+    REAL     :: fw, e_l, alb_w, qfx_w
+    REAL, PARAMETER :: e_w = 0.97          ! lake surface emissivity, emg in ShalLakeFluxes
 
 !local variable:
 
@@ -299,8 +313,20 @@ MODULE module_sf_lake
        !   lake_icefrac3d(i,1,j) = xice(i,j)
        !   endif
 
+! blue-tile (P4): a land cell with water fraction fw > 0 also runs the lake column (Choulga et al. 2019:
+! all sub-grid water of a land-dominated cell is lake). Its water part is forced with WATER albedo and emissivity.
+        tile = .false.
+        fw   = 1.
 #if (EM_CORE==1)
-        if (lakemask(i,j).eq.1) THEN
+        if ( lake_tile_opt == 1 .and. lakemask(i,j) .ne. 1 .and. xland(i,j) < 1.5 .and. &
+             landusef(i,iswater,j) > 0. ) then
+           tile   = .true.
+           fw     = landusef(i,iswater,j)
+           alb_w  = 0.6 * lake_icefrac3d(i,1,j) + 0.08 * (1.0 - lake_icefrac3d(i,1,j))
+           LWDN   = GLW(I,J)*e_w
+           SOLNET = SOLDN*(1.-alb_w)
+        endif
+        if (lakemask(i,j).eq.1 .or. tile) THEN
 #else
         if (ivgtyp(i,j)==iswater.and.ht(i,j)>= lake_min_elev ) THEN
 #endif
@@ -371,6 +397,32 @@ MODULE module_sf_lake
 
 
            do c = 1,column
+            hfx_lkt(i,j) = eflx_sh_tot(c);  lh_lkt(i,j) = eflx_lh_tot(c)          ! blue-tile diagnostics
+            grd_lkt(i,j) = eflx_gnet(c);    tsk_lkt(i,j) = t_grnd(c)
+           enddo
+           IF ( tile ) THEN                                  ! blue-tile: area-weighted tile aggregation
+           do c = 1,column
+            tsk_land(i,j)   = tsk(i,j);     emiss_land(i,j) = emiss(i,j)          ! land state, restored before Noah
+            hfx_lnd(i,j)    = hfx(i,j);     lh_lnd(i,j) = lh(i,j);  grd_lnd(i,j) = grdflx(i,j)
+            if( t_grnd(c) >= tfrz ) then
+                qfx_w = eflx_lh_tot(c)/hvap
+            else
+                qfx_w = eflx_lh_tot(c)/hsub
+            endif
+            e_l           = emiss(i,j)
+            HFX(I,J)      = (1.-fw)*HFX(I,J)    + fw*eflx_sh_tot(c)
+            LH(I,J)       = (1.-fw)*LH(I,J)     + fw*eflx_lh_tot(c)
+            GRDFLX(I,J)   = (1.-fw)*GRDFLX(I,J) + fw*eflx_gnet(c)
+            QFX(I,J)      = (1.-fw)*QFX(I,J)    + fw*qfx_w
+            T2(I,J)       = (1.-fw)*T2(I,J)     + fw*t_ref2m(c)
+            Q2(I,J)       = (1.-fw)*Q2(I,J)     + fw*q_ref2m(c)
+            TH2(I,J)      = T2(I,J)*(1.E5/PSFC)**RCP
+            albedo(i,j)   = (1.-fw)*albedo(i,j) + fw*alb_w
+            emiss(i,j)    = (1.-fw)*e_l         + fw*e_w
+            TSK(I,J)      = ( ((1.-fw)*e_l*tsk_land(i,j)**4 + fw*e_w*t_grnd(c)**4) / emiss(i,j) )**0.25   ! conserves upward LW
+           enddo
+           ELSE
+           do c = 1,column
             HFX(I,J)          = eflx_sh_tot(c)            ![W/m/m]
             LH(I,J)           = eflx_lh_tot(c)            !W/m/m]
             GRDFLX(I,J)       = eflx_gnet(c)              !W/m/m]
@@ -386,6 +438,7 @@ MODULE module_sf_lake
                 qfx(i,j)      = eflx_lh_tot(c)/hsub       ! heat flux (W/m^2)=>mass flux(kg/(sm^2))
             endif
            enddo
+           ENDIF                                             ! blue-tile
 
 ! Renew Lake State Varialbes:(14)
            do c = 1,column
@@ -4896,7 +4949,8 @@ end subroutine LakeDebug
 #endif
                     lake_depth_flag, use_lakedepth,                                   &
                     tkdry3d,        tksatu3d,        lake,            its, ite, jts, jte, &
-                    ims,ime, jms,jme)
+                    ims,ime, jms,jme,                                                  &
+                    landusef, nlcat, lake_tile_opt)                    ! blue-tile (P4)
 
 !==============================================================================
 ! This subroutine was first edited by Hongping Gu for coupling
@@ -4906,6 +4960,9 @@ end subroutine LakeDebug
   USE module_wrf_error
   implicit none
 
+  INTEGER , INTENT (IN) :: nlcat, lake_tile_opt                          ! blue-tile (P4)
+  REAL, DIMENSION( ims:ime, nlcat, jms:jme ), INTENT(IN) :: landusef      ! blue-tile (P4)
+  INTEGER :: numb_tile                                                    ! blue-tile (P4)
   INTEGER , INTENT (IN) :: iswater
   REAL,     INTENT(IN)  :: xice_threshold
   REAL, DIMENSION( ims:ime , jms:jme ), INTENT(INOUT)::   XICE
@@ -5070,6 +5127,22 @@ end subroutine LakeDebug
        end do
     write(message,*) "the total number of lake grid is :", numb_lak
     CALL wrf_message(message)
+! blue-tile (P4): land cells with a water fraction also get a lake column (lakemask stays 0).
+! All sub-grid water of a land-dominated cell is lake water (Choulga et al. 2019 HESS, sec 2);
+! no minimum fraction (IFS runs FLake in every grid box, same paper).
+   numb_tile = 0
+   IF ( lake_tile_opt == 1 ) THEN
+       do i=its,ite
+         do j=jts,jte
+           if ( .not. lake(i,j) .and. xland(i,j) < 1.5 .and. landusef(i,iswater,j) > 0. ) then
+              lake(i,j) = .true.
+              numb_tile = numb_tile + 1
+           end if
+         end do
+       end do
+       write(message,*) "blue-tile: number of land cells with a lake tile :", numb_tile
+       CALL wrf_message(message)
+   ENDIF
 !    CALL LakeDebug(msg)
 ! initialize lake grid 
 

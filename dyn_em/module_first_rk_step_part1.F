@@ -709,6 +709,11 @@ BENCH_START(surf_driver_tim)
      &        ,csol3d=grid%csol3d,              tkmg3d=grid%tkmg3d                  & !lake     
      &        ,tkdry3d=grid%tkdry3d,            tksatu3d=grid%tksatu3d              &   
      &        ,LakeModel=grid%sf_lake_physics,  lake_min_elev=grid%lake_min_elev    & !lake  
+     &        ,lake_tile_opt=grid%lake_tile_opt                                    & ! blue-tile (P4)
+     &        ,tsk_land=grid%tsk_land,          emiss_land=grid%emiss_land          & ! blue-tile (P4)
+     &        ,hfx_lkt=grid%hfx_lkt,  lh_lkt=grid%lh_lkt,  grd_lkt=grid%grd_lkt      & ! blue-tile (P4)
+     &        ,tsk_lkt=grid%tsk_lkt,  hfx_lnd=grid%hfx_lnd, lh_lnd=grid%lh_lnd       & ! blue-tile (P4)
+     &        ,grd_lnd=grid%grd_lnd                                                 & ! blue-tile (P4)
 #if ( EM_CORE == 1)
      &        ,LakeMask=grid%LakeMask                                               & !lake
      &        ,restart_flag=restart_flag                                            & !flag showing if is a restart timestep

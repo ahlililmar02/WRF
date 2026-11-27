@@ -111,6 +111,8 @@ CONTAINS
      &          ,h2osoi_liq3d, h2osoi_vol3d, z3d,        dz3d           & !lake
      &          ,zi3d,         watsat3d,     csol3d,     tkmg3d         & !lake
      &          ,tkdry3d,      tksatu3d,     LakeModel,  lake_min_elev     & !lake
+     &          ,lake_tile_opt, tsk_land, emiss_land                    & ! blue-tile (P4)
+     &          ,hfx_lkt, lh_lkt, grd_lkt, tsk_lkt, hfx_lnd, lh_lnd, grd_lnd & ! blue-tile (P4)
 #if (EM_CORE==1)
      &          ,lakemask                                               & !lake
                 , restart_flag                                          & ! restart_flag
@@ -1472,6 +1474,9 @@ CONTAINS
     REAL,    INTENT(IN)                            :: shalwater_depth 
     real,    dimension(ims:ime,jms:jme ),intent(inout) :: water_depth 
     real,    dimension(ims:ime,jms:jme ),intent(in)                         :: lakedepth2d
+    INTEGER, INTENT(IN) :: lake_tile_opt                                   ! blue-tile (P4)
+    REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) :: tsk_land, emiss_land, hfx_lkt, lh_lkt, &
+                                                        grd_lkt, tsk_lkt, hfx_lnd, lh_lnd, grd_lnd
 #if (EM_CORE==1)
     real ,    dimension(ims:ime,jms:jme )  ::  lakemask
     logical , intent(in) :: restart_flag
@@ -2904,6 +2909,19 @@ CONTAINS
                    tslb_tmp, smois_tmp, num_soil_layers, i_start(ij), i_end(ij), j_start(ij), j_end(ij), ims, &
                    ime, jms, jme, kms, kme, kts, kte)
                end if
+
+! blue-tile (P4): give Noah its own land-part TSK/EMISS back in lake-tile cells, so the blended
+! (land + water) skin values that radiation and the surface layer used do not leak into Noah's land state.
+               IF ( lake_tile_opt == 1 .AND. LakeModel == 1 ) THEN
+                 DO j = j_start(ij), j_end(ij)
+                 DO i = i_start(ij), i_end(ij)
+                   IF ( tsk_land(i,j) > 0. ) THEN
+                     tsk(i,j)   = tsk_land(i,j)
+                     emiss(i,j) = emiss_land(i,j)
+                   ENDIF
+                 ENDDO
+                 ENDDO
+               ENDIF
 
                CALL lsm(dz8w,qv_curr,p8w,t_phy,tsk,                 &
                 hfx,qfx,lh,grdflx,qgh,gsw,swdown,swddir,swddif,     &
@@ -4535,7 +4553,11 @@ CONTAINS
                      lakemask                                           ,&
 #endif
                      hfx          ,lh             ,grdflx       ,tsk             ,&  !o
-                     qfx          ,t2             ,th2          ,q2 )
+                     qfx          ,t2             ,th2          ,q2              ,&
+                     landusef     ,nlcat          ,lake_tile_opt                 ,&  ! blue-tile (P4)
+                     tsk_land     ,emiss_land                                    ,&
+                     hfx_lkt      ,lh_lkt         ,grd_lkt      ,tsk_lkt         ,&
+                     hfx_lnd      ,lh_lnd         ,grd_lnd )
  
  
       ENDDO

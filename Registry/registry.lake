@@ -24,6 +24,17 @@ state    real    tkmg3d           i{lake_sll}j    misc        1         z     i0
 state    real    tkdry3d          i{lake_sll}j    misc        1         z     i012rhd=(interp_mask_water_field:lu_index,islake)u=(copy_fcnm)      "tkdry3d"        "thermal conductivity, dry soil"         "W/m/Kelvin"
 state    real    tksatu3d         i{lake_sll}j    misc        1         z     i012rhd=(interp_mask_water_field:lu_index,islake)u=(copy_fcnm)      "tksatu3d"       "thermal conductivity, saturated soil"    "W/m-K"
 
+# blue-tile (P4): lake column blended by water fraction in land cells (lake_tile_opt=1)
+state    real    TSK_LAND         ij              misc        1         -      rh     "TSK_LAND"       "land-part skin temperature of lake-tile cells"  "K"
+state    real    EMISS_LAND       ij              misc        1         -      rh     "EMISS_LAND"     "land-part emissivity of lake-tile cells"        ""
+state    real    HFX_LKT          ij              misc        1         -      h      "HFX_LKT"        "lake-part sensible heat flux, lake cells and tile cells"  "W m-2"
+state    real    LH_LKT           ij              misc        1         -      h      "LH_LKT"         "lake-part latent heat flux, lake cells and tile cells"    "W m-2"
+state    real    GRD_LKT          ij              misc        1         -      h      "GRD_LKT"        "lake-part ground (storage) heat flux"                    "W m-2"
+state    real    TSK_LKT          ij              misc        1         -      h      "TSK_LKT"        "lake-part surface temperature (t_grnd)"                  "K"
+state    real    HFX_LND          ij              misc        1         -      h      "HFX_LND"        "land-part sensible heat flux, tile cells"                "W m-2"
+state    real    LH_LND           ij              misc        1         -      h      "LH_LND"         "land-part latent heat flux, tile cells"                  "W m-2"
+state    real    GRD_LND          ij              misc        1         -      h      "GRD_LND"        "land-part ground heat flux, tile cells"                  "W m-2"
+
 state   integer  LAKEFLAG          -              misc         1        -     i0        "LAKEFLAG"         "Flag for lake  in the global attributes for metgrid data"
 state   integer  LAKE_DEPTH_FLAG   -              misc         1        -     i0        "LAKE_DEPTH_FLAG"   "Flag for lakedepth  in the global attributes for metgrid data"
 
@@ -32,6 +43,7 @@ state   integer  LAKE_DEPTH_FLAG   -              misc         1        -     i0
 rconfig   real    lakedepth_default        namelist,physics      max_domains  50       rh    "lakedepth_default"  "default lake depth"      "m"   
 rconfig   real    lake_min_elev           namelist,physics      max_domains   5       rh     "lake_min_elev"        ""      ""   
 rconfig   integer  use_lakedepth          namelist,physics      max_domains   1       rh     "use_lakedepth"     ""      ""   
+rconfig   integer  lake_tile_opt          namelist,physics      max_domains   0       rh     "lake_tile_opt"     "0 stock; 1 lake column blended by water fraction in land cells (P4 blue tile)"      ""   
 
 
 # Lake packages
